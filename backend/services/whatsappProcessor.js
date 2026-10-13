@@ -301,8 +301,16 @@ function candidateFromMessage(msg, attachment) {
   if (values.length > 1 && !calculated) {
     cand.alertas.push('Se detectaron varios valores. Revisar cuál corresponde al total del gasto.');
   }
+  if (hasAdjustmentContext(msg.text)) {
+    cand.alertas.push('El mensaje menciona descuento, ajuste o verificación de valor. No debe tomarse como gasto definitivo sin revisión humana.');
+  }
   recomputeCandidateStatus(cand);
   return cand;
+}
+
+function hasAdjustmentContext(text) {
+  const n = normalizeText(text);
+  return ['descuento', 'menos descuento', 'ajuste', 'nota credito', 'nota crédito', 'verificar valor', 'revisar valor'].some(t => n.includes(normalizeText(t)));
 }
 
 function recomputeCandidateStatus(cand) {
@@ -315,7 +323,7 @@ function recomputeCandidateStatus(cand) {
 
   cand.faltantes = missing;
 
-  if (cand.alertas?.some(a => /varios valores|PDF detectado sin asociación/i.test(a))) {
+  if (cand.alertas?.some(a => /varios valores|PDF detectado sin asociación|descuento|ajuste|verificación de valor/i.test(a))) {
     cand.estado = 'requiere_revision';
   } else if (missing.length === 0) {
     cand.estado = 'completo';
@@ -384,6 +392,8 @@ function extractAmounts(text) {
 
 function stripNonAmountArtifacts(text) {
   return String(text || '')
+    // Corrige separadores escritos con error humano: 1;.487.500 -> 1.487.500
+    .replace(/(\d)\s*;\s*(?=\.)/g, '$1')
     // Quita nombres de archivo de WhatsApp para no leer IMG-20261009-WA0023 como $20.261.009.
     .replace(/[\wÁÉÍÓÚáéíóúÑñ\- .()]+\.(?:jpg|jpeg|png|webp|pdf|PDF|heic|HEIC|docx?|xlsx?|csv)/gi, ' ')
     .replace(/WA\d{3,5}/gi, ' ')
@@ -405,7 +415,9 @@ function isLikelyNonMoneyContext(context) {
     'img', 'wa', 'jpg', 'jpeg', 'png', 'pdf', 'archivo',
     'nit', 'cc', 'c.c', 'cedula', 'cedula', 'telefono', 'tel', 'celular',
     'cuenta', 'factura no', 'factura nro', 'factura numero', 'resolucion',
-    'autorizacion', 'codigo', 'cod', 'direccion'
+    'autorizacion', 'codigo', 'cod', 'direccion',
+    // Unidades físicas: 1.600 kls, 20 bultos, 300 metros no son dinero.
+    ' kg', 'kls', 'kilos', 'kilogramo', 'kilogramos', 'gramos', 'litros', ' lts', 'metros', ' mts', 'm2', 'm³', 'cantidad'
   ].some(term => n.includes(normalizeText(term)));
 }
 
@@ -536,7 +548,7 @@ function buildSummary(candidates, messages, files, originalName, chatName, pdfIn
   const byFinca = groupSum(candidates, 'finca');
   const totalDetected = candidates.reduce((acc, c) => {
     // Total preliminar: solo suma registros con valor detectado que no fueron marcados para revisión.
-    // En este MVP el total NO es contable; sirve como indicador hasta que haya revisión humana.
+    // Excluye descuentos/ajustes/verificaciones y soportes ambiguos. NO es un total contable definitivo.
     if (c.estado === 'requiere_revision') return acc;
     return acc + (Number(c.valor) || 0);
   }, 0);
