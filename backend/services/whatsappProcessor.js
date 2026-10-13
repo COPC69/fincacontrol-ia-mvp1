@@ -347,13 +347,17 @@ function hasExpenseSignal(text) {
 }
 
 function extractAmounts(text) {
-  const n = text || '';
+  const original = text || '';
+  const n = stripNonAmountArtifacts(original);
   const found = [];
   const seen = new Set();
   const patterns = [
+    // Valores explícitos con signo pesos: $2.817.400, $ 172.663, $120000
     /\$\s*([0-9]{1,3}(?:[.,][0-9]{3})+(?:,[0-9]{1,2})?|[0-9]{5,9}(?:,[0-9]{1,2})?)/g,
+    // Valores con separador de miles: 2.817.400.
     /\b([0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?)\b/g,
-    /\b([0-9]{5,9})\s*(?:pesos|cop)?\b/gi
+    // Números sin separador solo si dicen pesos/cop. Evita tomar fechas de archivos tipo IMG-20261009.
+    /\b([0-9]{5,9})\s*(?:pesos|cop)\b/gi
   ];
 
   for (const re of patterns) {
@@ -361,13 +365,48 @@ function extractAmounts(text) {
     while ((m = re.exec(n)) !== null) {
       const raw = m[1];
       const value = normalizeAmount(raw);
-      if (value && value >= 1000 && value <= 500000000 && !seen.has(value + ':' + raw)) {
+      const context = n.slice(Math.max(0, m.index - 35), Math.min(n.length, m.index + String(m[0]).length + 35));
+      if (
+        value &&
+        value >= 1000 &&
+        value <= 500000000 &&
+        !isLikelyDateNumber(value) &&
+        !isLikelyNonMoneyContext(context) &&
+        !seen.has(value + ':' + raw)
+      ) {
         seen.add(value + ':' + raw);
         found.push({ raw, value });
       }
     }
   }
   return dedupeAmounts(found);
+}
+
+function stripNonAmountArtifacts(text) {
+  return String(text || '')
+    // Quita nombres de archivo de WhatsApp para no leer IMG-20261009-WA0023 como $20.261.009.
+    .replace(/[\wÁÉÍÓÚáéíóúÑñ\- .()]+\.(?:jpg|jpeg|png|webp|pdf|PDF|heic|HEIC|docx?|xlsx?|csv)/gi, ' ')
+    .replace(/WA\d{3,5}/gi, ' ')
+    .replace(/archivo adjunto/gi, ' ');
+}
+
+function isLikelyDateNumber(value) {
+  const s = String(Math.round(value));
+  if (s.length !== 8 || !s.startsWith('20')) return false;
+  const yyyy = Number(s.slice(0, 4));
+  const mm = Number(s.slice(4, 6));
+  const dd = Number(s.slice(6, 8));
+  return yyyy >= 2000 && yyyy <= 2099 && mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;
+}
+
+function isLikelyNonMoneyContext(context) {
+  const n = normalizeText(context);
+  return [
+    'img', 'wa', 'jpg', 'jpeg', 'png', 'pdf', 'archivo',
+    'nit', 'cc', 'c.c', 'cedula', 'cedula', 'telefono', 'tel', 'celular',
+    'cuenta', 'factura no', 'factura nro', 'factura numero', 'resolucion',
+    'autorizacion', 'codigo', 'cod', 'direccion'
+  ].some(term => n.includes(normalizeText(term)));
 }
 
 function dedupeAmounts(amounts) {
@@ -495,7 +534,12 @@ function buildSummary(candidates, messages, files, originalName, chatName, pdfIn
   const byStatus = groupCount(candidates, 'estado');
   const byCategory = groupSum(candidates, 'categoria');
   const byFinca = groupSum(candidates, 'finca');
-  const totalDetected = candidates.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+  const totalDetected = candidates.reduce((acc, c) => {
+    // Total preliminar: solo suma registros con valor detectado que no fueron marcados para revisión.
+    // En este MVP el total NO es contable; sirve como indicador hasta que haya revisión humana.
+    if (c.estado === 'requiere_revision') return acc;
+    return acc + (Number(c.valor) || 0);
+  }, 0);
   const missingCounter = {};
   for (const c of candidates) for (const m of c.faltantes || []) missingCounter[m] = (missingCounter[m] || 0) + 1;
 
