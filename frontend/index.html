@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FincaControl IA — MVP 1</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hero card">
+      <div>
+        <p class="eyebrow">MVP 1 · Control de gastos de finca</p>
+        <h1>FincaControl IA</h1>
+        <p class="subtitle">Sube un ZIP exportado de WhatsApp y convierte mensajes, fotos y PDFs en una tabla preliminar de gastos candidatos.</p>
+      </div>
+      <div class="status-pill" id="apiStatus">Backend sin probar</div>
+    </section>
+
+    <section class="card config-card">
+      <h2>1. Configuración rápida</h2>
+      <p class="muted">Pega aquí la URL de Render. Se guarda en este navegador para que no tengas que editar código.</p>
+      <div class="row">
+        <input id="apiUrl" type="url" placeholder="https://tu-api.onrender.com" />
+        <button id="saveApiUrl" class="secondary">Guardar URL</button>
+        <button id="testApi" class="ghost">Probar backend</button>
+      </div>
+    </section>
+
+    <section class="card upload-card">
+      <h2>2. Procesar ZIP de WhatsApp</h2>
+      <p class="muted">El ZIP debe exportarse desde WhatsApp con archivos incluidos. En este MVP no hay login ni guardado permanente.</p>
+      <label class="drop-zone" for="zipInput" id="dropZone">
+        <input id="zipInput" type="file" accept=".zip,application/zip" />
+        <span class="drop-icon">📦</span>
+        <strong>Seleccionar ZIP</strong>
+        <small id="fileName">Ningún archivo seleccionado</small>
+      </label>
+      <div class="actions">
+        <button id="processBtn">Procesar ZIP</button>
+        <button id="exportCsv" class="secondary" disabled>Exportar CSV</button>
+        <button id="resetBtn" class="ghost">Limpiar</button>
+      </div>
+    </section>
+
+    <section id="loading" class="card loading hidden">
+      <div class="spinner"></div>
+      <div>
+        <h2>Procesando información...</h2>
+        <p class="muted">Esto puede tardar unos segundos si el ZIP trae PDFs.</p>
+      </div>
+    </section>
+
+    <section id="errorBox" class="card error hidden"></section>
+
+    <section id="results" class="hidden">
+      <section class="card">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Resultado del procesamiento</p>
+            <h2>Resumen del cierre</h2>
+          </div>
+          <div class="quality" id="qualityScore">0/100</div>
+        </div>
+
+        <div class="metrics-grid" id="metricsGrid"></div>
+        <div class="warnings" id="warnings"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Bandeja de revisión</p>
+            <h2>Gastos candidatos</h2>
+          </div>
+          <div class="filters">
+            <button class="filter active" data-filter="all">Todos</button>
+            <button class="filter" data-filter="completo">Completos</button>
+            <button class="filter" data-filter="incompleto">Incompletos</button>
+            <button class="filter" data-filter="requiere_revision">Revisar</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Estado</th>
+                <th>Fecha</th>
+                <th>Descripción</th>
+                <th>Valor</th>
+                <th>Categoría</th>
+                <th>Finca</th>
+                <th>Medio</th>
+                <th>Faltantes</th>
+                <th>Soportes</th>
+              </tr>
+            </thead>
+            <tbody id="expensesBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Lectura del MVP</h2>
+        <p class="muted">Este resultado no reemplaza la revisión del dueño o administrador. La app propone una organización inicial, marca faltantes y ayuda a crear conciencia sobre la calidad de la información.</p>
+        <pre id="rawJson" class="json-box"></pre>
+      </section>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
